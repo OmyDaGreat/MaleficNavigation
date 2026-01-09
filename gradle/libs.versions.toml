@@ -3,12 +3,12 @@ precompose = "1.6.2"
 snakeyaml = "2.5"
 gson = "2.13.2"
 kermit = "2.0.8"
-central = "2.0.2"
 maleficextensions = "1.4.4"
 dokka = "2.1.0"
 compose = "1.9.3"
 kotlin = "2.3.0"
 kotlinter = "5.3.0"
+vanniktech = "0.35.0"
 
 [libraries]
 precompose = { module = "moe.tlaster:precompose", version.ref = "precompose" }
@@ -22,5 +22,5 @@ compose-kotlin = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
 compose = { id = "org.jetbrains.compose", version.ref = "compose" }
-central = { id = "cn.lalaki.central", version.ref = "central"}
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktech" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

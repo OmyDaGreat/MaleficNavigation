@@ -1,68 +1,139 @@
-name: Version Release
+name: Publish to Maven Central
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+          - custom
+      custom_version:
+        description: 'Custom version (only used if version_bump is custom)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
 
 jobs:
-  create-release:
+  update_version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      new_version: ${{ steps.bump_version.outputs.new_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Bump version
+        id: bump_version
+        run: |
+          CURRENT_VERSION=$(grep "^v=" gradle.properties | cut -d= -f2)
+          echo "Current version: $CURRENT_VERSION"
+          
+          if [ "${{ inputs.version_bump }}" = "custom" ]; then
+            NEW_VERSION="${{ inputs.custom_version }}"
+          else
+            IFS='.' read -r -a version_parts <<< "$CURRENT_VERSION"
+            major="${version_parts[0]}"
+            minor="${version_parts[1]}"
+            patch="${version_parts[2]}"
+          
+            case "${{ inputs.version_bump }}" in
+              major)
+                major=$((major + 1))
+                minor=0
+                patch=0
+                ;;
+              minor)
+                minor=$((minor + 1))
+                patch=0
+                ;;
+              patch)
+                patch=$((patch + 1))
+                ;;
+            esac
+          
+            NEW_VERSION="${major}.${minor}.${patch}"
+          fi
+          
+          echo "New version: $NEW_VERSION"
+          sed -i "s/^v=.*/v=$NEW_VERSION/" gradle.properties
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit version change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git push
+
+  publish:
+    needs: update_version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Add user_token.xml
+        run: echo "${{ secrets.SONATYPE_TOKEN_XML }}" > user_token.xml
+
+      - name: Run lint and format checks
+        run: ./gradlew formatAndLintKotlin
+
+      - name: Publish to Maven Central
+        run: ./gradlew publishToCentralPortal
+        env:
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.GPG_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
+
+  create_release:
+    needs: [update_version, publish]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Check commit message and create release
+      - name: Set up Git
         run: |
-          # Get the latest commit message
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          
-          # Check if commit message matches version pattern
-          if [[ $COMMIT_MSG =~ ^version\(([0-9]+\.[0-9]+\.[0-9]+)\):.*$ ]]; then
-            VERSION="${BASH_REMATCH[1]}"
-            echo "Version $VERSION detected in commit message"
-          
-            # Get the latest tag
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-          
-            # Generate changelog
-            if [ "$LATEST_TAG" = "none" ]; then
-              # If no previous tag exists, use all commits
-              CHANGELOG=$(git log --pretty=format:"* %s (%h)" --no-merges)
-              # Get all unique contributors
-              CONTRIBUTORS=$(git log --format="%aN <%aE>" --no-merges | sort -u)
-            else
-              # Get commits since last tag
-              CHANGELOG=$(git log --pretty=format:"* %s (%h)" --no-merges ${LATEST_TAG}..HEAD)
-              # Get contributors since last tag
-              CONTRIBUTORS=$(git log ${LATEST_TAG}..HEAD --format="%aN <%aE>" --no-merges | sort -u)
-            fi
-          
-            # Create a temporary file for the release notes
-            {
-              echo "# Changelog for version $VERSION"
-              echo ""
-              echo "$CHANGELOG"
-              echo ""
-              echo "## Contributors"
-              echo ""
-              echo "Thank you to all contributors for this release:"
-              echo ""
-              while IFS= read -r contributor; do
-                echo "* $contributor"
-              done <<< "$CONTRIBUTORS"
-            } > changelog.md
-          
-            # Create GitHub release
-            gh release create "v$VERSION" \
-              --title "Version $VERSION" \
-              --notes-file changelog.md
-          else
-            echo "Commit message does not match version pattern. Skipping release creation."
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git config --global --add safe.directory $GITHUB_WORKSPACE
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ needs.update_version.outputs.new_version }}"
+          name: "Release v${{ needs.update_version.outputs.new_version }}"
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true
+          make_latest: true

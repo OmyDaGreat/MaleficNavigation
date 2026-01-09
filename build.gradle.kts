@@ -1,5 +1,3 @@
-import cn.lalaki.pub.BaseCentralPortalPlusExtension.PublishingType
-
 val user: String by project
 val repo: String by project
 val g: String by project
@@ -14,21 +12,24 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlinter)
     alias(libs.plugins.compose)
-    alias(libs.plugins.central)
+    alias(libs.plugins.maven.publish)
     alias(libs.plugins.dokka)
-    `maven-publish`
-    signing
 }
 
 dependencies {
     implementation(libs.malefic.ext.compose)
     implementation(compose.desktop.common)
+    implementation(compose.material3)
     implementation(compose.animation)
     implementation(compose.foundation)
     implementation(libs.snakeyaml)
     implementation(libs.kermit)
     implementation(libs.gson)
     api(libs.precompose)
+}
+
+configurations.all {
+    exclude(group = "androidx.compose.material", module = "material")
 }
 
 group = g
@@ -41,67 +42,49 @@ repositories {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
     withJavadocJar()
     withSourcesJar()
 }
 
 kotlin {
     jvmToolchain {
-        this.languageVersion.set(JavaLanguageVersion.of(17))
+        this.languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            groupId = g
-            artifactId = artifact
-            version = v
+mavenPublishing {
+    publishToMavenCentral()
 
-            from(components["java"])
+    signAllPublications()
 
-            pom {
-                name.set(repo)
-                description.set(desc)
-                url.set("https://github.com/$user/$repo")
-                developers {
-                    developer {
-                        name.set("Om Gupta")
-                        email.set("ogupta4242@gmail.com")
-                    }
-                }
-                licenses {
-                    license {
-                        name.set("MIT License")
-                        url.set("https://opensource.org/licenses/MIT")
-                    }
-                }
-                scm {
-                    connection.set("scm:git:git://github.com/$user/$repo.git")
-                    developerConnection.set("scm:git:ssh://github.com/$user/$repo.git")
-                    url.set("https://github.com/$user/$repo")
-                }
+    coordinates(g, artifact, v)
+
+    pom {
+        name = repo
+        description = desc
+        inceptionYear = "2025"
+        url = "https://github.com/$user/$repo"
+        licenses {
+            license {
+                name = "MIT License"
+                url = "https://mit.malefic.xyz"
             }
         }
-        repositories {
-            maven {
-                url = localMavenRepo
+        developers {
+            developer {
+                name = "Om Gupta"
+                email = "ogupta4242@gmail.com"
+                url = "malefic.xyz"
             }
+        }
+        scm {
+            url = "https://github.com/$user/$repo"
+            connection = "scm:git:git://github.com/$user/$repo.git"
+            developerConnection = "scm:git:ssh://github.com/$user/$repo.git"
         }
     }
-}
-
-signing {
-    useGpgCmd()
-    sign(publishing.publications)
-}
-
-centralPortalPlus {
-    url = localMavenRepo
-    tokenXml = uri(layout.projectDirectory.file("user_token.xml"))
-    publishingType = PublishingType.AUTOMATIC
 }
 
 tasks.apply {
