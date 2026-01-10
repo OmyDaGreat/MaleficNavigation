@@ -106,6 +106,12 @@ tasks.apply {
     }
 }
 
+afterEvaluate {
+    tasks.named("generateMetadataFileForMavenPublication") {
+        dependsOn(tasks.named("dokkaJavadocJar"))
+    }
+}
+
 dokka {
     dokkaPublications.html {
         outputDirectory.set(layout.buildDirectory.dir("dokka"))
