@@ -3,137 +3,102 @@ name: Publish to Maven Central
 on:
   workflow_dispatch:
     inputs:
-      version_bump:
+      bump:
         description: 'Version bump type'
-        required: true
+        required: false
+        default: 'patch'
         type: choice
         options:
-          - major
-          - minor
           - patch
-          - custom
+          - minor
+          - major
       custom_version:
-        description: 'Custom version (only used if version_bump is custom)'
+        description: 'Custom version (overrides bump)'
         required: false
         type: string
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
-  update_version:
+  publish:
+    name: Release Build and Publish
     runs-on: ubuntu-latest
-    outputs:
-      new_version: ${{ steps.bump_version.outputs.new_version }}
     steps:
-      - name: Checkout code
+      - name: Check out code
         uses: actions/checkout@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Bump version
-        id: bump_version
-        run: |
-          CURRENT_VERSION=$(grep "^v=" gradle.properties | cut -d= -f2)
-          echo "Current version: $CURRENT_VERSION"
-          
-          if [ "${{ inputs.version_bump }}" = "custom" ]; then
-            NEW_VERSION="${{ inputs.custom_version }}"
-          else
-            IFS='.' read -r -a version_parts <<< "$CURRENT_VERSION"
-            major="${version_parts[0]}"
-            minor="${version_parts[1]}"
-            patch="${version_parts[2]}"
-          
-            case "${{ inputs.version_bump }}" in
-              major)
-                major=$((major + 1))
-                minor=0
-                patch=0
-                ;;
-              minor)
-                minor=$((minor + 1))
-                patch=0
-                ;;
-              patch)
-                patch=$((patch + 1))
-                ;;
-            esac
-          
-            NEW_VERSION="${major}.${minor}.${patch}"
-          fi
-          
-          echo "New version: $NEW_VERSION"
-          sed -i "s/^v=.*/v=$NEW_VERSION/" gradle.properties
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Commit version change
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add gradle.properties
-          git commit -m "Bump version to ${{ steps.bump_version.outputs.new_version }}"
-          git push
-
-  publish:
-    needs: update_version
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '21'
-          cache: 'gradle'
-
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
+          java-version: 21
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
-
-      - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@v6
         with:
-          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
-          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          gradle-version: "9.2.1"
 
-      - name: Add user_token.xml
-        run: echo "${{ secrets.SONATYPE_TOKEN_XML }}" > user_token.xml
+      - name: Make gradlew Executable
+        run: chmod +x gradlew
 
-      - name: Run lint and format checks
-        run: ./gradlew formatAndLintKotlin
-
-      - name: Publish to Maven Central
-        run: ./gradlew publishToCentralPortal
-        env:
-          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.GPG_KEY_ID }}
-          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
-          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
-
-  create_release:
-    needs: [update_version, publish]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Set up Git
+      - name: Bump version in gradle.properties
+        id: bump_version
         run: |
-          git config --global --add safe.directory $GITHUB_WORKSPACE
+          # Bash
+          file="gradle.properties"
+          if [ -n "${{ github.event.inputs.custom_version }}" ]; then
+          new_version="${{ github.event.inputs.custom_version }}"
+          else
+          version_line=$(grep "^v=" "$file" || echo "")
+          version=${version_line#v=}
+          IFS='.' read -r major minor patch <<< "$version"
+          case "${{ github.event.inputs.bump }}" in
+          major)
+          major=$((major+1)); minor=0; patch=0;;
+          minor)
+          minor=$((minor+1)); patch=0;;
+          patch|*)
+          patch=$((patch+1));;
+          esac
+          new_version="$major.$minor.$patch"
+          fi
+          sed -i "s/^v=.*/v=$new_version/" "$file"
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Commit and push version bump
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore(release): bump version to ${{ steps.bump_version.outputs.new_version }}"
+          file_pattern: gradle.properties
+
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      - name: Extract Maven Central credentials from token block
+        id: extract-creds
+        run: |
+          echo "${{ secrets.SONATYPE_TOKEN_XML }}" > server.xml
+          USERNAME=$(xmllint --xpath "string(//username)" server.xml)
+          PASSWORD=$(xmllint --xpath "string(//password)" server.xml)
+          echo "ORG_GRADLE_PROJECT_mavenCentralUsername=$USERNAME" >> $GITHUB_ENV
+          echo "ORG_GRADLE_PROJECT_mavenCentralPassword=$PASSWORD" >> $GITHUB_ENV
+
+      - name: Publish to MavenCentral
+        run: ./gradlew publishAndReleaseToMavenCentral --no-configuration-cache
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.GPG_KEY_ID }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_PASSPHRASE }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_PRIVATE_KEY }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ needs.update_version.outputs.new_version }}"
-          name: "Release v${{ needs.update_version.outputs.new_version }}"
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: v${{ steps.bump_version.outputs.new_version }}
+          name: v${{ steps.bump_version.outputs.new_version }}
           generate_release_notes: true
-          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
