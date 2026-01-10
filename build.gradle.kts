@@ -98,9 +98,6 @@ tasks.apply {
         dependsOn(named("formatAndLintKotlin"))
         dependsOn(dokkaGenerate)
     }
-    publish {
-        dependsOn(named("formatAndLintKotlin"))
-    }
     test {
         useJUnitPlatform()
     }
