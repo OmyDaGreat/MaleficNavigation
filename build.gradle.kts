@@ -64,7 +64,7 @@ mavenPublishing {
     pom {
         name = repo
         description = desc
-        inceptionYear = "2025"
+        inceptionYear = "2024"
         url = "https://github.com/$user/$repo"
         licenses {
             license {
@@ -115,5 +115,8 @@ afterEvaluate {
 dokka {
     dokkaPublications.html {
         outputDirectory.set(layout.buildDirectory.dir("dokka"))
+    }
+    pluginsConfiguration.html {
+        footerMessage.set("&copy; 2026 Om Gupta &lt;ogupta4242@gmail.com&gt;")
     }
 }
