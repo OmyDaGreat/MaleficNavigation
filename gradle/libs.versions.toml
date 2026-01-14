@@ -5,10 +5,10 @@ gson = "2.13.2"
 kermit = "2.0.8"
 maleficextensions = "1.4.4"
 dokka = "2.1.0"
-compose = "1.10.0"
 kotlin = "2.3.0"
 kotlinter = "5.3.0"
 vanniktech = "0.35.0"
+material3 = "1.9.0"
 
 [libraries]
 precompose = { module = "moe.tlaster:precompose", version.ref = "precompose" }
@@ -16,11 +16,11 @@ snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 kermit = { module = "co.touchlab:kermit", version.ref = "kermit" }
 malefic-ext-compose = { module = "xyz.malefic:ext-compose", version.ref = "maleficextensions" }
+compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "material3" }
 
 [plugins]
 compose-kotlin = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
-compose = { id = "org.jetbrains.compose", version.ref = "compose" }
 maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktech" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

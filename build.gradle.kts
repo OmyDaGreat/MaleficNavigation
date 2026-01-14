@@ -11,17 +11,13 @@ plugins {
     alias(libs.plugins.compose.kotlin)
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlinter)
-    alias(libs.plugins.compose)
     alias(libs.plugins.maven.publish)
     alias(libs.plugins.dokka)
 }
 
 dependencies {
     implementation(libs.malefic.ext.compose)
-    implementation(compose.desktop.common)
-    implementation(compose.material3)
-    implementation(compose.animation)
-    implementation(compose.foundation)
+    implementation(libs.compose.material3)
     implementation(libs.snakeyaml)
     implementation(libs.kermit)
     implementation(libs.gson)
