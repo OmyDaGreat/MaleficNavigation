@@ -2,7 +2,7 @@
 precompose = "1.6.2"
 snakeyaml = "2.5"
 gson = "2.13.2"
-kermit = "2.0.8"
+kermit = "2.1.0"
 maleficextensions = "1.4.4"
 dokka = "2.1.0"
 kotlin = "2.3.0"
