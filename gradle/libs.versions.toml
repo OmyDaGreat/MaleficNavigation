@@ -1,6 +1,6 @@
 [versions]
 precompose = "1.6.2"
-snakeyaml = "2.5"
+snakeyaml = "2.6"
 gson = "2.13.2"
 kermit = "2.1.0"
 maleficextensions = "1.4.4"
